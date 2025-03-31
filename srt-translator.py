@@ -6,8 +6,8 @@ from typing import List, Dict, Optional
 import requests
 from tqdm import tqdm
 
-# 添加默认API Key常量
-DEFAULT_API_KEY = "sk-klijdmtsdrxumpwikspfzybcwevenwzxafoyzvgtkkqpfbdi"
+# Import the API Key from consts.py
+from consts import DEFAULT_API_KEY
 
 class SRTCore:
     @staticmethod
