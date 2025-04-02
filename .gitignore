@@ -1,4 +1,6 @@
 *.srt
 consts.py
 
+cn/
+en/
 __pycache__/
