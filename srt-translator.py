@@ -5,9 +5,7 @@ import time
 from typing import List, Dict, Optional
 import requests
 from tqdm import tqdm
-
-# Import the API Key from consts.py
-from consts import DEFAULT_API_KEY
+from consts import API_CONFIG  # 修改: 从consts.py导入API_CONFIG
 
 class SRTCore:
     @staticmethod
@@ -79,8 +77,9 @@ class SRTCore:
         return '\n'.join(srt_content)
 
 class SFClient:
-    def __init__(self, api_key: str, batch_size: int = 10, verbose: bool = False):
-        self.endpoint = "https://api.siliconflow.cn/v1/chat/completions"
+    def __init__(self, api_key: str, endpoint: str, model: str, batch_size: int = 10, verbose: bool = False):
+        # 修改: 使用从API_CONFIG获取的endpoint
+        self.endpoint = endpoint
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
@@ -91,6 +90,7 @@ class SFClient:
             'backoff': [1, 3, 5]  # 退避等待秒数
         }
         self.verbose = verbose  # 添加verbose参数
+        self.model = model  # 修改: 添加model属性
 
     def _construct_payload(self, batch: List[Dict]) -> dict:
         """直接将原始字幕输入AI"""
@@ -106,7 +106,7 @@ class SFClient:
         )
         
         return {
-            "model": "deepseek-ai/DeepSeek-R1",
+            "model": self.model,  # 修改: 使用self.model
             "temperature": 1.0,
             "messages": [
                 {"role": "user", "content": prompt}
@@ -172,21 +172,27 @@ def main():
     parser = argparse.ArgumentParser(description="SRT自然流式翻译工具")
     parser.add_argument('-i', '--input', required=True, help='输入SRT文件路径')
     parser.add_argument('-o', '--output', required=True, help='输出文件路径')
-    parser.add_argument('--api_key', help='硅基API密钥')
-    parser.add_argument('--batch', type=int, default=30, 
-                       help='批次处理量 (建议25-30)')
+    parser.add_argument('--api_vendor', required=False, default='siliconflow', help='API供应商')  # 修改: 设置默认值为'siliconflow'
+    parser.add_argument('--batch', type=int, default=30, help='批次处理量 (建议25-30)')
     parser.add_argument('--verbose', action='store_true', help='启用详细输出模式')  # 添加verbose参数
     args = parser.parse_args()
 
-    # 使用命令行参数中的API Key，如果没有提供则使用默认API Key
-    api_key = args.api_key if args.api_key else DEFAULT_API_KEY
+    # 修改: 根据api_vendor从API_CONFIG中获取配置
+    api_config = API_CONFIG.get(args.api_vendor)
+    if not api_config:
+        print(f"Error: Unknown API vendor {args.api_vendor}")
+        return
+
+    api_key = api_config['DEFAULT_API_KEY']
+    api_endpoint = api_config['API_ENDPOINT']
+    model = api_config['MODEL']
 
     print(">> 正在解析输入文件...")
     srt_entries = SRTCore.parse_srt(args.input)
     print(f">> 加载完成，共发现 {len(srt_entries)} 条字幕")
 
     print(">> 初始化翻译引擎...")
-    client = SFClient(api_key=api_key, batch_size=args.batch, verbose=args.verbose)  # 传递verbose参数
+    client = SFClient(api_key=api_key, endpoint=api_endpoint, model=model, batch_size=args.batch, verbose=args.verbose)  # 修改: 传递endpoint和model参数
     pipeline = TranslationPipeline(client, verbose=args.verbose)  # 传递verbose参数
 
     print(">> 开始翻译流程...")

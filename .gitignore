@@ -1,2 +1,4 @@
 *.srt
 consts.py
+
+__pycache__/
