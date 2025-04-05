@@ -175,6 +175,7 @@ def main():
     parser.add_argument('--api_vendor', required=False, default='siliconflow', help='API供应商')  # 修改: 设置默认值为'siliconflow'
     parser.add_argument('--batch', type=int, default=30, help='批次处理量 (建议25-30)')
     parser.add_argument('--verbose', action='store_true', help='启用详细输出模式')  # 添加verbose参数
+    parser.add_argument('--list_dir', action='store_true', help='处理指定目录下的所有 .srt 文件')  # 新增list_dir参数
     args = parser.parse_args()
 
     # 修改: 根据api_vendor从API_CONFIG中获取配置
@@ -187,21 +188,57 @@ def main():
     api_endpoint = api_config['API_ENDPOINT']
     model = api_config['MODEL']
 
-    print(">> 正在解析输入文件...")
-    srt_entries = SRTCore.parse_srt(args.input)
-    print(f">> 加载完成，共发现 {len(srt_entries)} 条字幕")
+    if args.list_dir:
+        import os
+        import glob
 
-    print(">> 初始化翻译引擎...")
-    client = SFClient(api_key=api_key, endpoint=api_endpoint, model=model, batch_size=args.batch, verbose=args.verbose)  # 修改: 传递endpoint和model参数
-    pipeline = TranslationPipeline(client, verbose=args.verbose)  # 传递verbose参数
+        # 获取目录下所有.srt文件，排除以 _cn.srt 结尾的文件
+        srt_files = [f for f in glob.glob(os.path.join(args.input, '*.srt')) if not f.endswith('_cn.srt')]
+        if not srt_files:
+            print(f"No .srt files found in directory: {args.input}")
+            return
 
-    print(">> 开始翻译流程...")
-    translated_data = pipeline.execute(srt_entries)
-    print(translated_data)
-    print(">> 生成结果文件...")
-    SRTCore.generate_srt(translated_data, args.output)
+        total_files = len(srt_files)
+        processed_files = 0
 
-    print(f"\n处理完成！输出文件已保存至 {args.output}")
+        for srt_file in srt_files:
+            output_file = os.path.join(args.output, os.path.basename(srt_file))
+            print(f"\nProcessing file: {srt_file}")
+            print(">> 正在解析输入文件...")
+            srt_entries = SRTCore.parse_srt(srt_file)
+            print(f">> 加载完成，共发现 {len(srt_entries)} 条字幕")
+
+            print(">> 初始化翻译引擎...")
+            client = SFClient(api_key=api_key, endpoint=api_endpoint, model=model, batch_size=args.batch, verbose=args.verbose)  # 修改: 传递endpoint和model参数
+            pipeline = TranslationPipeline(client, verbose=args.verbose)  # 传递verbose参数
+
+            print(">> 开始翻译流程...")
+            translated_data = pipeline.execute(srt_entries)
+            print(translated_data)
+            print(">> 生成结果文件...")
+            SRTCore.generate_srt(translated_data, output_file)
+
+            processed_files += 1
+            print(f"\n处理完成！输出文件已保存至 {output_file}")
+            print(f"进度: [{processed_files}/{total_files}]")
+
+    else:
+        print(">> 正在解析输入文件...")
+        srt_entries = SRTCore.parse_srt(args.input)
+        print(f">> 加载完成，共发现 {len(srt_entries)} 条字幕")
+
+        print(">> 初始化翻译引擎...")
+        client = SFClient(api_key=api_key, endpoint=api_endpoint, model=model, batch_size=args.batch, verbose=args.verbose)  # 修改: 传递endpoint和model参数
+        pipeline = TranslationPipeline(client, verbose=args.verbose)  # 传递verbose参数
+
+        print(">> 开始翻译流程...")
+        translated_data = pipeline.execute(srt_entries)
+        print(translated_data)
+        print(">> 生成结果文件...")
+        SRTCore.generate_srt(translated_data, args.output)
+
+        print(f"\n处理完成！输出文件已保存至 {args.output}")
 
 if __name__ == '__main__':
     main()
+    
