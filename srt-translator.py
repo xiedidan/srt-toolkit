@@ -80,19 +80,22 @@ class SRTCore:
 
 class SFClient:
     def __init__(self, api_key: str, endpoint: str, model: str, batch_size: int = 10, verbose: bool = False):
-        # 修改: 使用从API_CONFIG获取的endpoint
         self.endpoint = endpoint
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
         self.batch_size = batch_size
+        # 修改重试策略配置: 增加到20次重试并调整退避时间
         self.retry_policy = {
-            'max_attempts': 3,
-            'backoff': [1, 3, 5]  # 退避等待秒数
+            'max_attempts': 20,
+            'backoff': [5, 10, 30, 60, 120,  # 前5次退避时间
+                        300, 300, 300, 300, 300,  # 6-10次 5分钟
+                        600, 600, 600, 600, 600,  # 11-15次 10分钟
+                        1800, 1800, 1800, 1800, 1800]  # 16-20次 30分钟
         }
-        self.verbose = verbose  # 添加verbose参数
-        self.model = model  # 修改: 添加model属性
+        self.verbose = verbose
+        self.model = model
 
     def _construct_payload(self, batch: List[Dict]) -> dict:
         """直接将原始字幕输入AI"""
@@ -109,7 +112,7 @@ class SFClient:
         )
         
         return {
-            "model": self.model,  # 修改: 使用self.model
+            "model": self.model,
             "temperature": 1.0,
             "messages": [
                 {"role": "user", "content": prompt}
@@ -149,7 +152,7 @@ class SFClient:
 class TranslationPipeline:
     def __init__(self, client: SFClient, verbose: bool = False):
         self.client = client
-        self.verbose = verbose  # 添加verbose参数
+        self.verbose = verbose
     
     def execute(self, src_entries: List[Dict]) -> List[Dict]:
         """全流程处理并保持与原始结构的对应"""
@@ -163,7 +166,7 @@ class TranslationPipeline:
             while cursor < total:
                 batch_entries = src_entries[cursor:cursor+self.client.batch_size]
                 
-                results = self.client.process_batch(batch_entries, self.verbose)  # 传递verbose参数
+                results = self.client.process_batch(batch_entries, self.verbose)
                 
                 translated.append(results)
                 cursor += self.client.batch_size
