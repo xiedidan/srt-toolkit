@@ -5,6 +5,7 @@ import glob
 import json
 import time
 from typing import List, Dict, Optional
+from datetime import datetime
 import requests
 from tqdm import tqdm
 from consts import API_CONFIG  # 修改: 从consts.py导入API_CONFIG
@@ -124,7 +125,8 @@ class SFClient:
         payload = self._construct_payload(batch)
 
         if verbose:  # 打印AI输入
-            print(f"Sending batch to AI: {payload}")
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{self.__class__.__name__}.process_batch] [{current_time}] >> 发送到AI的批次数据: {payload}")
         
         for attempt in range(self.retry_policy['max_attempts']):
             try:
@@ -136,15 +138,19 @@ class SFClient:
                 results = SRTCore.parse_srt_str(translated_text)  # 直接分割翻译结果
 
                 if len(results) != len(batch):
-                    print("Error: Translation result does not match the input batch size.")
-                
+                    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    # print(f"[{self.__class__.__name__}.process_batch] [{current_time}] >> 翻译结果与输入批次大小不匹配！原始行数: {len(batch)}, 翻译结果行数: {len(results)}")
+                    raise ValueError(f"翻译结果与输入批次大小不匹配: 原始{len(batch)}条 vs 翻译{len(results)}条")  # 修改: 异常信息添加具体数值
+
                 if verbose:  # 打印AI输出
-                    print(f"Received translation: {translated_text}")
+                    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    print(f"[{self.__class__.__name__}.process_batch] [{current_time}] >> 接收到翻译结果: {translated_text}")
                 
                 return translated_text
             
             except Exception as e:
-                print(f"Batch error (attempt {attempt+1}): {str(e)}")
+                current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                print(f"[{self.__class__.__name__}.process_batch] [{current_time}] >> 批次处理错误（第{attempt+1}次尝试）: {str(e)}")
                 time.sleep(self.retry_policy['backoff'][attempt])
         
         return None
@@ -162,7 +168,7 @@ class TranslationPipeline:
         cursor = 0
         total = len(src_entries)
         # 使用tqdm显示进度条
-        with tqdm(total=total, desc="Processing subtitles", unit="entry") as pbar:
+        with tqdm(total=total, desc="翻译进程", unit="entry") as pbar:
             while cursor < total:
                 batch_entries = src_entries[cursor:cursor+self.client.batch_size]
                 
@@ -177,76 +183,100 @@ class TranslationPipeline:
 def main():
     parser = argparse.ArgumentParser(description="SRT自然流式翻译工具")
     parser.add_argument('-i', '--input', required=True, help='输入SRT文件路径')
-    parser.add_argument('-o', '--output', help='输出文件路径')  # 修改: 移除required=True
-    parser.add_argument('--api_vendor', required=False, default='siliconflow', help='API供应商')  # 修改: 设置默认值为'siliconflow'
+    parser.add_argument('-o', '--output', help='输出文件路径')
+    parser.add_argument('--api_vendor', required=False, default='siliconflow', help='API供应商')
+    parser.add_argument('--model_type', required=False, default=None, help='指定模型类型，对应API_CONFIG中的TYPE字段')
     parser.add_argument('--batch', type=int, default=30, help='批次处理量 (建议25-30)')
-    parser.add_argument('--verbose', action='store_true', help='启用详细输出模式')  # 添加verbose参数
-    parser.add_argument('--list_dir', action='store_true', help='处理指定目录下的所有 .srt 文件')  # 新增list_dir参数
+    parser.add_argument('--verbose', action='store_true', help='启用详细输出模式')
+    parser.add_argument('--list_dir', action='store_true', help='处理指定目录下的所有 .srt 文件')
     
     args = parser.parse_args()
 
     # 修改: 添加默认output逻辑
     if not args.output:
         base, ext = os.path.splitext(args.input)
-        args.output = f"{base}_transl{ext}"
-        
-    # 修改: 根据api_vendor从API_CONFIG中获取配置
-    api_config = API_CONFIG.get(args.api_vendor)
-    if not api_config:
-        print(f"Error: Unknown API vendor {args.api_vendor}")
+        args.output = f"{base}_cn{ext}"
+
+    # 修改: 根据api_vendor和model_type选择模型配置
+    vendor_models = API_CONFIG.get(args.api_vendor)
+    if not vendor_models:
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{__name__}] [{current_time}] >> 错误：未知的API供应商 {args.api_vendor}")
         return
 
-    api_key = api_config['DEFAULT_API_KEY']
-    api_endpoint = api_config['API_ENDPOINT']
-    model = api_config['MODEL']
+    selected_model = None
+    if args.model_type:
+        for model_config in vendor_models:
+            if model_config['TYPE'] == args.model_type:
+                selected_model = model_config
+                break
+    if selected_model is None:
+        selected_model = vendor_models[0]
 
+    api_key = selected_model['DEFAULT_API_KEY']
+    api_endpoint = selected_model['API_ENDPOINT']
+    model = selected_model['MODEL']
+
+    # 处理目录模式
     if args.list_dir:
         # 获取目录下所有.srt文件，排除以 _cn.srt 结尾的文件
         srt_files = [f for f in glob.glob(os.path.join(args.input, '*.srt')) if not f.endswith('_cn.srt')]
         if not srt_files:
-            print(f"No .srt files found in directory: {args.input}")
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{__name__}] [{current_time}] >> 目录中未找到.srt文件: {args.input}")
             return
 
         total_files = len(srt_files)
         processed_files = 0
 
         for srt_file in srt_files:
-            output_file = os.path.join(args.output, os.path.basename(srt_file))
-            print(f"\nProcessing file: {srt_file}")
-            print(">> 正在解析输入文件...")
-            srt_entries = SRTCore.parse_srt(srt_file)
-            print(f">> 加载完成，共发现 {len(srt_entries)} 条字幕")
+            # 修改输出文件名构造逻辑，添加_transl后缀
+            base_name = os.path.basename(srt_file)
+            base, ext = os.path.splitext(base_name)
+            output_filename = f"{base}_cn{ext}"
+            output_file = os.path.join(args.output, output_filename)  # 使用新文件名
 
-            print(">> 初始化翻译引擎...")
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{__name__}] [{current_time}] >> 开始处理文件: {srt_file}")
+            print(f"[{__name__}] [{current_time}] >> 解析输入文件...")
+            srt_entries = SRTCore.parse_srt(srt_file)
+            print(f"[{__name__}] [{current_time}] >> 解析完成，共发现 {len(srt_entries)} 条字幕")
+
+            print(f"[{__name__}] [{current_time}] >> 准备翻译引擎...")
             client = SFClient(api_key=api_key, endpoint=api_endpoint, model=model, batch_size=args.batch, verbose=args.verbose)  # 修改: 传递endpoint和model参数
             pipeline = TranslationPipeline(client, verbose=args.verbose)  # 传递verbose参数
 
-            print(">> 开始翻译流程...")
+            print(f"[{__name__}] [{current_time}] >> 开始翻译流程...")
             translated_data = pipeline.execute(srt_entries)
-            print(translated_data)
-            print(">> 生成结果文件...")
+            
+            if args.verbose:
+                print(translated_data)
+            
+            print(f"[{__name__}] [{current_time}] >> 翻译流程完成")
+            print(f"[{__name__}] [{current_time}] >> 生成结果文件...")
             SRTCore.generate_srt(translated_data, output_file)
 
             processed_files += 1
-            print(f"\n处理完成！输出文件已保存至 {output_file}")
-            print(f"进度: [{processed_files}/{total_files}]")
+            print(f"[{__name__}] [{current_time}] >> 处理完成，输出文件已保存至 {output_file}")
 
     else:
-        print(">> 正在解析输入文件...")
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{__name__}] [{current_time}] >> 正在解析输入文件...")
         srt_entries = SRTCore.parse_srt(args.input)
-        print(f">> 加载完成，共发现 {len(srt_entries)} 条字幕")
+        print(f"[{__name__}] [{current_time}] >> 加载完成，共发现 {len(srt_entries)} 条字幕")
 
-        print(">> 初始化翻译引擎...")
+        print(f"[{__name__}] [{current_time}] >> 初始化翻译引擎...")
         client = SFClient(api_key=api_key, endpoint=api_endpoint, model=model, batch_size=args.batch, verbose=args.verbose)  # 修改: 传递endpoint和model参数
         pipeline = TranslationPipeline(client, verbose=args.verbose)  # 传递verbose参数
 
-        print(">> 开始翻译流程...")
+        print(f"[{__name__}] [{current_time}] >> 开始翻译流程...")
         translated_data = pipeline.execute(srt_entries)
         print(translated_data)
-        print(">> 生成结果文件...")
+        print(f"[{__name__}] [{current_time}] >> 翻译流程已完成")
+        print(f"[{__name__}] [{current_time}] >> 生成结果文件...")
         SRTCore.generate_srt(translated_data, args.output)
 
-        print(f"\n处理完成！输出文件已保存至 {args.output}")
+        print(f"[{__name__}] [{current_time}] >> 处理完成！输出文件已保存至 {args.output}")
 
 if __name__ == '__main__':
     main()
