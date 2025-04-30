@@ -192,10 +192,13 @@ def main():
     
     args = parser.parse_args()
 
-    # 修改: 添加默认output逻辑
+    # 修改: 添加默认output逻辑，但仅在非目录模式下生效
     if not args.output:
-        base, ext = os.path.splitext(args.input)
-        args.output = f"{base}_cn{ext}"
+        if not args.list_dir:
+            base, ext = os.path.splitext(args.input)
+            args.output = f"{base}_cn{ext}"
+        else:
+            args.output = args.input
 
     # 修改: 根据api_vendor和model_type选择模型配置
     vendor_models = API_CONFIG.get(args.api_vendor)
@@ -230,7 +233,7 @@ def main():
         processed_files = 0
 
         for srt_file in srt_files:
-            # 修改输出文件名构造逻辑，添加_transl后缀
+            # 修改输出文件名构造逻辑，添加_cn后缀
             base_name = os.path.basename(srt_file)
             base, ext = os.path.splitext(base_name)
             output_filename = f"{base}_cn{ext}"
