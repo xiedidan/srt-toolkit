@@ -24,7 +24,7 @@ def detect_cover_map(video_path):
         result = subprocess.run(info_cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, check=True)
         attachment_streams = result.stderr.decode().splitlines()
         # print(f"附件流信息：{attachment_streams}")
-        
+
         # 遍历附件流，寻找可用的封面流
         for line in attachment_streams:
             if "Stream #0:" in line and "Video" in line and "(attached pic)" in line and "Subtitle" not in line: # "(attached pic)" 可能是ytb特有的
@@ -48,7 +48,7 @@ def extract_cover(video_path, output_path, map_param=None, detect_map=False):
         detected_map = detect_cover_map(video_path)
         if detected_map:
             map_param = detected_map
-            print(f"检测到存在封面的视频流：{map_param}")
+            # print(f"检测到存在封面的视频流：{map_param}")
 
     # 优先使用用户指定的流
     if map_param:
