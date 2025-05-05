@@ -14,55 +14,27 @@ def detect_cover_map(video_path):
         info_cmd = [
             "ffmpeg",
             "-hide_banner",
-            "-loglevel", "error",
             "-i", video_path,
-            "-map", "0:t",  # 所有附件流
+            # "-map", "0:t",  # 所有附件流
             "-c", "copy",
             "-f", "null",
             "-"
         ]
+        # print("执行命令:", " ".join(info_cmd))  # 输出命令
         result = subprocess.run(info_cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, check=True)
         attachment_streams = result.stderr.decode().splitlines()
-
+        # print(f"附件流信息：{attachment_streams}")
+        
         # 遍历附件流，寻找可用的封面流
         for line in attachment_streams:
             if "Stream #0:" in line and "Video" in line and "(attached pic)" in line and "Subtitle" not in line: # "(attached pic)" 可能是ytb特有的
-                stream_index = line.split("Stream #0:")[1].split(":")[0]
-                test_cmd = [
-                    "ffmpeg",
-                    "-hide_banner",
-                    "-loglevel", "error",
-                    "-i", video_path,
-                    "-map", f"0:{stream_index}",
-                    "-c", "copy",
-                    "-vframes", "1",
-                    "-f", "null",
-                    "-"
-                ]
-                try:
-                    subprocess.run(test_cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, check=True)
+                stream_index = line.split("Stream #0:")[1].split(":")[0].split("[")[0]
+                # 检查流的编码格式是否为 mjpeg
+                if "mjpeg" in line.lower():
                     return f"0:{stream_index}"
-                except subprocess.CalledProcessError:
-                    continue
-    except subprocess.CalledProcessError:
-        pass
 
-    # 尝试视频流
-    cmd = [
-        "ffmpeg",
-        "-hide_banner",
-        "-loglevel", "error",
-        "-i", video_path,
-        "-map", "0:v",  # 优先尝试视频流
-        "-c", "copy",
-        "-vframes", "1",
-        "-f", "null",
-        "-"
-    ]
-    try:
-        subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, check=True)
-        return "0:v"
     except subprocess.CalledProcessError:
+        print("警告：未找到可用的封面流")
         pass
 
     return None
@@ -76,6 +48,7 @@ def extract_cover(video_path, output_path, map_param=None, detect_map=False):
         detected_map = detect_cover_map(video_path)
         if detected_map:
             map_param = detected_map
+            print(f"检测到存在封面的视频流：{map_param}")
 
     # 优先使用用户指定的流
     if map_param:
@@ -96,7 +69,7 @@ def extract_cover(video_path, output_path, map_param=None, detect_map=False):
         except subprocess.CalledProcessError:
             return False
 
-    # 未指定流时：优先尝试附件流，再第一帧
+    # 未指定流时：仅尝试附件流，不再回退到第一帧
     try:
         # 尝试附件流中的图像（如封面）
         cmd_attach = [
@@ -112,24 +85,6 @@ def extract_cover(video_path, output_path, map_param=None, detect_map=False):
             output_path
         ]
         subprocess.run(cmd_attach, check=True, stderr=subprocess.PIPE)
-        return True
-    except subprocess.CalledProcessError:
-        pass
-
-    try:
-        # 提取视频第一帧作为回退
-        cmd_frame = [
-            "ffmpeg",
-            "-hide_banner",
-            "-loglevel", "error",
-            "-y",
-            "-i", video_path,
-            "-vf", "select=eq(n\\,0)",
-            "-vframes", "1",
-            "-q:v", "2",
-            output_path
-        ]
-        subprocess.run(cmd_frame, check=True, stderr=subprocess.PIPE)
         return True
     except subprocess.CalledProcessError:
         return False
@@ -156,7 +111,7 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--input", required=True, help="输入目录路径")
     parser.add_argument("-o", "--output", default=None, help="输出目录路径（默认：与输入目录相同）")
     parser.add_argument("-m", "--map", help="指定封面流通道（例如：0:3）")
-    parser.add_argument("--detect_map", action="store_true", default=True, help="启用自动探测封面 map（默认开启）")
+    parser.add_argument("--detect_map", action="store_true", default=True, help="启用自动探测封面 map（默认关闭）")
     args = parser.parse_args()
     if args.output is None:
         args.output = args.input
