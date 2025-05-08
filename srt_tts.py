@@ -19,6 +19,8 @@ import re
 import subprocess
 import json
 import argparse
+import pysrt
+from consts import TTS_BASE_URL
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="SRT字幕语音合成工具")
@@ -42,8 +44,6 @@ def parse_arguments():
     return parser.parse_args()
 
 import requests
-
-BASE_URL = "http://api.example.com"  # 请替换为实际的API基础URL
 
 class SrtTTS:
     def __init__(self, input, output=None, subtitle_suffix="_cn", audio_suffix="", audio_codec="aac", audio_quality="-vbr 3", audio_format="m4a", speech_speed="moderate", speech_pitch="moderate", voice_role="male", clone_role="", verbose=False, speed_detection=True):
@@ -84,22 +84,15 @@ class SrtTTS:
 
     def parse_srt(self, srt_file_path):
         """解析SRT文件，返回字幕列表"""
+        subs = pysrt.open(srt_file_path, encoding='utf-8')
         subtitles = []
-        with open(srt_file_path, 'r', encoding='utf-8') as file:
-            content = file.read()
-            blocks = re.split(r'\n\n', content.strip())
-            for block in blocks:
-                lines = block.split('\n')
-                if len(lines) >= 3:
-                    index = lines[0]
-                    timecodes = lines[1].split(' --> ')
-                    text = '\n'.join(lines[2:])
-                    subtitles.append({
-                        'index': index,
-                        'start_time': self.time_to_seconds(timecodes[0]),
-                        'end_time': self.time_to_seconds(timecodes[1]),
-                        'text': text
-                    })
+        for sub in subs:
+            subtitles.append({
+                'index': sub.index,
+                'start_time': sub.start.ordinal / 1000,  # 转换为秒
+                'end_time': sub.end.ordinal / 1000,  # 转换为秒
+                'text': sub.text
+            })
         return subtitles
 
     def time_to_seconds(self, timecode):
@@ -143,7 +136,7 @@ class SrtTTS:
             "stream": False,
             "response_format": self.audio_format
         }
-        resp = requests.post(f"{BASE_URL}/speak", json=payload)
+        resp = requests.post(f"{TTS_BASE_URL}/speak", json=payload)  # 修改：使用TTS_BASE_URL
         if resp.status_code == 200:
             return resp.content
         else:
