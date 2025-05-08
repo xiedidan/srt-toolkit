@@ -216,6 +216,10 @@ def main():
     if selected_model is None:
         selected_model = vendor_models[0]
 
+    # 新增: 打印实际选中的模型
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{__name__}] [{current_time}] >> 实际选中的模型: {selected_model['MODEL']}")
+
     api_key = selected_model['DEFAULT_API_KEY']
     api_endpoint = selected_model['API_ENDPOINT']
     model = selected_model['MODEL']
@@ -239,6 +243,12 @@ def main():
             output_filename = f"{base}_cn{ext}"
             output_file = os.path.join(args.output, output_filename)  # 使用新文件名
 
+            # 检查目标文件是否已存在，如果存在则跳过
+            if os.path.exists(output_file):
+                current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                print(f"[{__name__}] [{current_time}] >> 跳过已存在的文件: {output_file}")
+                continue
+
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"[{__name__}] [{current_time}] >> 开始处理文件: {srt_file}")
             print(f"[{__name__}] [{current_time}] >> 解析输入文件...")
@@ -251,10 +261,10 @@ def main():
 
             print(f"[{__name__}] [{current_time}] >> 开始翻译流程...")
             translated_data = pipeline.execute(srt_entries)
-            
+        
             if args.verbose:
                 print(translated_data)
-            
+        
             print(f"[{__name__}] [{current_time}] >> 翻译流程完成")
             print(f"[{__name__}] [{current_time}] >> 生成结果文件...")
             SRTCore.generate_srt(translated_data, output_file)
