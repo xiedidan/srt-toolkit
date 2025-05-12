@@ -74,6 +74,8 @@ if __name__ == "__main__":
     parser.add_argument("--list_dir", action='store_true', help="处理指定目录下的所有主视频文件")
     # 新增 --hwaccel 参数
     parser.add_argument("--hwaccel", default=None, choices=["None", "nvenc"], help="硬件加速选项，默认为None（CPU编码），可选nvenc（NVIDIA硬件加速）")
+    # 新增 --main-suffix 参数
+    parser.add_argument("--main-suffix", default="", help="主视频文件后缀（默认为空）")
 
     args = parser.parse_args()
 
@@ -97,8 +99,10 @@ if __name__ == "__main__":
             # 修改主视频文件路径
             local_args['main_video'] = video_file
             
-            # 构造字幕文件路径
+            # 构造字幕文件路径，去除主视频后缀
             main_base = os.path.splitext(os.path.basename(video_file))[0]
+            if args.main_suffix:
+                main_base = main_base.replace(args.main_suffix, "")
             main_dir = os.path.dirname(video_file)
             ext = os.path.splitext(video_file)[1]
 
@@ -111,14 +115,21 @@ if __name__ == "__main__":
             output_filename = f"{base}_blended{ext}"
             local_args['output'] = os.path.join(os.path.dirname(video_file), output_filename)
 
+            # 检查输出文件是否已存在
+            if os.path.exists(local_args['output']):
+                print(f"跳过已存在的文件: {local_args['output']}")
+                continue
+
             print(f"正在处理文件: {video_file}")
             combine_video_with_subtitles(local_args)  # 使用 local_args 调用函数
             processed_files += 1
             print(f"已处理 {processed_files}/{total_files} 个文件")
 
     else:
-        # 自动生成字幕文件路径
+        # 自动生成字幕文件路径，去除主视频后缀
         main_base = os.path.splitext(os.path.basename(args.main_video))[0]
+        if args.main_suffix:
+            main_base = main_base.replace(args.main_suffix, "")
         main_dir = os.path.dirname(args.main_video)
         ext = os.path.splitext(args.main_video)[1]
         
@@ -131,6 +142,11 @@ if __name__ == "__main__":
         if args.output is None:
             output_dir = os.path.dirname(args.main_video)
             args.output = os.path.join(output_dir, f"{main_base}_blended.mp4")
+
+        # 检查输出文件是否已存在
+        if os.path.exists(args.output):
+            print(f"跳过已存在的文件: {args.output}")
+            exit(0)
 
         # 验证文件存在
         for f in [args.main_video, args.subtitle1, args.subtitle2]:

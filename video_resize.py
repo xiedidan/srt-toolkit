@@ -21,13 +21,10 @@ def resize_video(input_file, output_file, width, height, device='cpu'):
     else:
         raise ValueError(f"Unsupported device: {device}")
     
-    # 添加-map 0 参数，确保所有附件流（如字幕、音频轨道等）都被复制到输出文件中
-    command.extend(['-map', '0'])
+    # 明确指定音频编码器
+    command.extend(['-c:a', 'aac'])
     
-    command.extend([
-        '-c:a', 'copy',
-        output_file
-    ])
+    command.append(output_file)
     subprocess.run(command, check=True)
 
 def process_directory(directory, width, height, replace=False, suffix='_resized', device='cpu'):
