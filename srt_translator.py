@@ -132,7 +132,6 @@ class SFClient:
             try:
                 resp = requests.post(self.endpoint, headers=self.headers, json=payload, timeout=600)
                 resp.raise_for_status()
-                
                 translated_text = resp.json()['choices'][0]['message']['content'] + "\n"
                 
                 results = SRTCore.parse_srt_str(translated_text)  # 直接分割翻译结果
@@ -185,6 +184,7 @@ def main():
     parser.add_argument('-i', '--input', required=True, help='输入SRT文件路径')
     parser.add_argument('-o', '--output', help='输出文件路径')
     parser.add_argument('--api_vendor', required=False, default='siliconflow', help='API供应商')
+    parser.add_argument('--api_key', required=False, default='', help='自定义API密钥（留空则使用默认值）')
     parser.add_argument('--model_type', required=False, default=None, help='指定模型类型，对应API_CONFIG中的TYPE字段')
     parser.add_argument('--batch', type=int, default=30, help='批次处理量 (建议25-30)')
     parser.add_argument('--verbose', action='store_true', help='启用详细输出模式')
@@ -221,6 +221,9 @@ def main():
     print(f"[{__name__}] [{current_time}] >> 实际选中的模型: {selected_model['MODEL']}")
 
     api_key = selected_model['DEFAULT_API_KEY']
+    # 添加API_KEY覆盖逻辑
+    if args.api_key:  # 如果用户提供了自定义api_key则优先使用
+        api_key = args.api_key
     api_endpoint = selected_model['API_ENDPOINT']
     model = selected_model['MODEL']
 
