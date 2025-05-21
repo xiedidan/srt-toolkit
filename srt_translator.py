@@ -114,7 +114,7 @@ class SFClient:
         
         return {
             "model": self.model,
-            "temperature": 1.0,
+            "temperature": self.temperature,  # 修改为使用实例化的temperature参数
             "messages": [
                 {"role": "user", "content": prompt}
             ]
@@ -186,11 +186,48 @@ def main():
     parser.add_argument('--api_vendor', required=False, default='siliconflow', help='API供应商')
     parser.add_argument('--api_key', required=False, default='', help='自定义API密钥（留空则使用默认值）')
     parser.add_argument('--model_type', required=False, default=None, help='指定模型类型，对应API_CONFIG中的TYPE字段')
+    parser.add_argument('--temperature', type=float, default=1.3, 
+                       help='控制生成随机性的温度系数 (默认:1.3)')
+    parser.add_argument('--timer', type=str, 
+                       help='指定任务开始时间 (格式: HH:MM:SS)')
     parser.add_argument('--batch', type=int, default=30, help='批次处理量 (建议25-30)')
     parser.add_argument('--verbose', action='store_true', help='启用详细输出模式')
     parser.add_argument('--list_dir', action='store_true', help='处理指定目录下的所有 .srt 文件')
     
     args = parser.parse_args()
+
+    # 新增定时功能逻辑
+    if args.timer:
+        try:
+            now = datetime.now()
+            target_time = datetime.strptime(args.timer, "%H:%M:%S").replace(
+                year=now.year, month=now.month, day=now.day)
+            
+            if target_time < now:
+                target_time = target_time.replace(day=now.day+1)
+                
+            delta = (target_time - now).total_seconds()
+            current_time = now.strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{__name__}] [{current_time}] >> 定时任务已设置，将在 {args.timer} 开始执行")
+            
+            # 修改为每秒更新的倒计时
+            try:
+                while delta > 0:
+                    hours, remainder = divmod(delta, 3600)
+                    minutes, seconds = divmod(remainder, 60)
+                    countdown = f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}"
+                    print(f"\r剩余等待时间: {countdown}", end="", flush=True)
+                    time.sleep(1)
+                    delta -= 1
+                print("\n" + "="*40)  # 倒计时结束后换行
+            except KeyboardInterrupt:
+                print("\n定时任务已取消")
+                return
+
+        except ValueError as e:
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{__name__}] [{current_time}] >> 错误的时间格式: {args.timer}，请使用 HH:MM:SS 格式")
+            return
 
     # 修改: 添加默认output逻辑，但仅在非目录模式下生效
     if not args.output:
@@ -259,7 +296,9 @@ def main():
             print(f"[{__name__}] [{current_time}] >> 解析完成，共发现 {len(srt_entries)} 条字幕")
 
             print(f"[{__name__}] [{current_time}] >> 准备翻译引擎...")
-            client = SFClient(api_key=api_key, endpoint=api_endpoint, model=model, batch_size=args.batch, verbose=args.verbose)  # 修改: 传递endpoint和model参数
+            client = SFClient(api_key=api_key, endpoint=api_endpoint, model=model, 
+                            batch_size=args.batch, verbose=args.verbose, 
+                            temperature=args.temperature)  # 新增temperature参数
             pipeline = TranslationPipeline(client, verbose=args.verbose)  # 传递verbose参数
 
             print(f"[{__name__}] [{current_time}] >> 开始翻译流程...")
@@ -282,7 +321,9 @@ def main():
         print(f"[{__name__}] [{current_time}] >> 加载完成，共发现 {len(srt_entries)} 条字幕")
 
         print(f"[{__name__}] [{current_time}] >> 初始化翻译引擎...")
-        client = SFClient(api_key=api_key, endpoint=api_endpoint, model=model, batch_size=args.batch, verbose=args.verbose)  # 修改: 传递endpoint和model参数
+        client = SFClient(api_key=api_key, endpoint=api_endpoint, model=model, 
+                        batch_size=args.batch, verbose=args.verbose, 
+                        temperature=args.temperature)  # 新增temperature参数
         pipeline = TranslationPipeline(client, verbose=args.verbose)  # 传递verbose参数
 
         print(f"[{__name__}] [{current_time}] >> 开始翻译流程...")
