@@ -178,7 +178,8 @@ class SrtTTS:
                     continue
                 
                 try:
-                    return self._try_clone_synthesis(subtitle, speed, role_dir, current_clone_role)
+                    # 修改: 首次尝试带reference_text，重试时不带
+                    return self._try_clone_synthesis(subtitle, speed, role_dir, current_clone_role, include_ref_text=(attempt == 0))
                 except requests.exceptions.HTTPError as e:
                     print(e)
                     if e.response.status_code == 500 and attempt < max_attempts - 1:
@@ -206,7 +207,7 @@ class SrtTTS:
         resp = requests.post(f"{TTS_BASE_URL}/speak", json=payload)
         return resp.content if resp.status_code == 200 else b""
 
-    def _try_clone_synthesis(self, subtitle, speed, role_dir, clone_role):
+    def _try_clone_synthesis(self, subtitle, speed, role_dir, clone_role, include_ref_text=True):
         """尝试使用特定克隆角色进行语音合成"""
         ref_audio_path = os.path.join(role_dir, "reference_audio.wav")
         ref_text_path = os.path.join(role_dir, "reference_text.txt")
@@ -226,10 +227,11 @@ class SrtTTS:
             "stream": False
         }
         
-        if os.path.exists(ref_text_path):
+        # 修改: 根据include_ref_text标志决定是否添加reference_text
+        if include_ref_text and os.path.exists(ref_text_path):
             with open(ref_text_path, "r", encoding="utf-8") as text_file:
                 payload["reference_text"] = text_file.read().strip()
-        
+
         with open(ref_audio_path, "rb") as audio_file:
             files = {"reference_audio_file": audio_file}
             resp = requests.post(f"{TTS_BASE_URL}/clone_voice", data=payload, files=files)
@@ -264,23 +266,36 @@ class SrtTTS:
         if not temp_files:
             raise ValueError("没有有效的音频片段可供拼接")
         
+        # 修改后的FFMPEG拼接逻辑：
         output_file = f"temp_final.{self.audio_format}"
         
+        filter_complex = []
         inputs = []
-        # 修改: 根据有效索引构建输入参数
+        delays = []
+        
+        # 构建每个音频流的延迟和持续时间
         for idx, temp_file in zip(valid_indices, temp_files):
-            subtitle = subtitles[idx]
-            inputs.append("-itsoffset")
-            inputs.append(str(subtitle['start_time']))
-            inputs.append("-i")
-            inputs.append(temp_file)
+            start_time = subtitles[idx]['start_time']
+            end_time = subtitles[idx]['end_time']
+            duration = end_time - start_time
+            
+            # 为每个音频流添加延迟和持续时间控制
+            filter_complex.append(
+                f"[{len(inputs)}:a]adelay=delays={int(start_time*1000)}:all=1[d{idx}];"
+                f"[d{idx}]apad=whole_dur={duration}[p{idx}]"
+            )
+            inputs.extend(["-i", temp_file])
+
+        # 合并所有处理后的音频流
+        merge_inputs = "".join([f"[p{idx}]" for idx in valid_indices])
+        filter_complex.append(f"{merge_inputs}amix=inputs={len(valid_indices)}:duration=longest[aout]")
         
         command = [
-            self.ffmpeg_path, 
-            *inputs, 
-            '-filter_complex', 
-            # 修改: 使用实际拼接数量替换原字幕数量
-            f"concat=n={len(temp_files)}:v=0:a=1", 
+            self.ffmpeg_path,
+            *inputs,
+            "-filter_complex",
+            ";".join(filter_complex),
+            "-map", "[aout]",
             '-c:a', self.audio_codec,
             *self.audio_quality,
             output_file

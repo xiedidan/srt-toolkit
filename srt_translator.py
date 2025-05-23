@@ -186,8 +186,8 @@ def main():
     parser.add_argument('--api_vendor', required=False, default='siliconflow', help='API供应商')
     parser.add_argument('--api_key', required=False, default='', help='自定义API密钥（留空则使用默认值）')
     parser.add_argument('--model_type', required=False, default=None, help='指定模型类型，对应API_CONFIG中的TYPE字段')
-    parser.add_argument('--temperature', type=float, default=1.3, 
-                       help='控制生成随机性的温度系数 (默认:1.3)')
+    parser.add_argument('--temperature', type=float, default=1.0, 
+                       help='控制生成随机性的温度系数 (默认:1.0)')
     parser.add_argument('--timer', type=str, 
                        help='指定任务开始时间 (格式: HH:MM:SS)')
     parser.add_argument('--batch', type=int, default=30, help='批次处理量 (建议25-30)')
