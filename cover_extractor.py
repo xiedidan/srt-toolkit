@@ -39,7 +39,7 @@ def detect_cover_map(video_path):
 
     return None
 
-def extract_cover(video_path, output_path, map_param=None, detect_map=False):
+def extract_cover(video_path, output_path, map_param=None, detect_map=False, resize=False, min_size=(1280, 720)):
     """
     提取视频封面（优先用户指定流，否则尝试附件流 -> 第一帧回退）
     """
@@ -61,8 +61,15 @@ def extract_cover(video_path, output_path, map_param=None, detect_map=False):
             "-map", map_param,
             "-c", "copy",
             "-vframes", "1",
-            output_path
         ]
+        # 添加缩放逻辑
+        if resize:
+            cmd += [
+                "-vf", f"scale=w='if(lt(iw,{min_size[0]}),{min_size[0]},iw)':h='if(lt(ih,{min_size[1]}),{min_size[1]},ih)',force_original_aspect_ratio=increase",
+                "-sws_flags", "lanczos",
+                "-q:v", "1"
+            ]
+        cmd.append(output_path)
         try:
             subprocess.run(cmd, check=True, stderr=subprocess.PIPE)
             return True
@@ -89,7 +96,7 @@ def extract_cover(video_path, output_path, map_param=None, detect_map=False):
     except subprocess.CalledProcessError:
         return False
 
-def process_directory(input_dir, output_dir, map_param=None, detect_map=False):
+def process_directory(input_dir, output_dir, map_param=None, detect_map=False, resize=False, min_size=(1280, 720)):
     """处理目录中的所有 MP4 文件"""
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -102,7 +109,7 @@ def process_directory(input_dir, output_dir, map_param=None, detect_map=False):
                 output_path = os.path.join(output_dir, f"{base_name}.jpg")
 
                 # 提取封面
-                success = extract_cover(video_path, output_path, map_param, detect_map)
+                success = extract_cover(video_path, output_path, map_param, detect_map, resize, min_size)
                 status = "成功" if success else "失败"
                 print(f"[{status}] {file} -> {os.path.basename(output_path)}")
 
@@ -112,12 +119,15 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", default=None, help="输出目录路径（默认：与输入目录相同）")
     parser.add_argument("-m", "--map", help="指定封面流通道（例如：0:3）")
     parser.add_argument("--detect_map", action="store_true", default=True, help="启用自动探测封面 map（默认关闭）")
+    parser.add_argument("--resize", action="store_true", help="启用封面图自动缩放（默认关闭）")
+    parser.add_argument("--min_size", default="1920x1080", 
+                       help="最小输出尺寸（格式：宽x高，默认：1920x1080）")
     args = parser.parse_args()
-    if args.output is None:
-        args.output = args.input
-
-    if not os.path.isdir(args.input):
-        print(f"错误：输入目录不存在 - {args.input}")
+    
+    # 解析min_size参数
+    min_size = tuple(map(int, args.min_size.split('x')))
+    if len(min_size) != 2:
+        print(f"错误：无效的尺寸格式 - {args.min_size}")
         sys.exit(1)
 
-    process_directory(args.input, args.output, args.map, args.detect_map)
+    process_directory(args.input, args.output, args.map, args.detect_map, args.resize, min_size)

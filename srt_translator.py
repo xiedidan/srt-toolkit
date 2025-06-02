@@ -4,6 +4,7 @@ import argparse
 import glob
 import json
 import time
+import shutil  # 新增: 导入shutil模块用于文件复制
 from typing import List, Dict, Optional
 from datetime import datetime
 import requests
@@ -80,13 +81,14 @@ class SRTCore:
         return '\n'.join(srt_content)
 
 class SFClient:
-    def __init__(self, api_key: str, endpoint: str, model: str, batch_size: int = 10, verbose: bool = False):
+    def __init__(self, api_key: str, endpoint: str, model: str, batch_size: int = 10, verbose: bool = False, temperature: float = 1.0):
         self.endpoint = endpoint
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
         self.batch_size = batch_size
+        self.temperature = temperature  # Add temperature parameter
         # 修改重试策略配置: 增加到20次重试并调整退避时间
         self.retry_policy = {
             'max_attempts': 20,
@@ -193,6 +195,8 @@ def main():
     parser.add_argument('--batch', type=int, default=30, help='批次处理量 (建议25-30)')
     parser.add_argument('--verbose', action='store_true', help='启用详细输出模式')
     parser.add_argument('--list_dir', action='store_true', help='处理指定目录下的所有 .srt 文件')
+    parser.add_argument('--original_prefix_addon', type=str, default='_en', 
+                       help='为原始SRT文件添加后缀（在.srt扩展名之前，默认:_en）')
     
     args = parser.parse_args()
 
@@ -277,6 +281,18 @@ def main():
         processed_files = 0
 
         for srt_file in srt_files:
+            # 添加原始文件后缀逻辑
+            if args.original_prefix_addon:
+                os.makedirs(args.output, exist_ok=True)
+                original_base = os.path.basename(srt_file)
+                original_base_name, ext = os.path.splitext(original_base)
+                original_output_path = os.path.join(args.output, f"{original_base_name}{args.original_prefix_addon}{ext}")
+                
+                if not os.path.exists(original_output_path):
+                    shutil.copy2(srt_file, original_output_path)
+                    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    print(f"[{__name__}] [{current_time}] >> 原始文件备份已保存至: {original_output_path}")
+
             # 修改输出文件名构造逻辑，添加_cn后缀
             base_name = os.path.basename(srt_file)
             base, ext = os.path.splitext(base_name)
