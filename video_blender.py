@@ -61,8 +61,8 @@ def combine_video_with_subtitles(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="视频字幕合成工具")
     parser.add_argument("-m", "--main-video", required=False, help="主视频文件路径")
-    parser.add_argument("-s1", "--subtitle1", default="_en", help="第一个字幕文件路径（默认: 主文件名_en）")
-    parser.add_argument("-s2", "--subtitle2", default="_cn", help="第二个字幕文件路径（默认: 主文件名_cn）")
+    parser.add_argument("-s1", "--subtitle1", default="_en.mp4", help="第一个字幕文件路径（默认: 主文件名_en.mp4）")
+    parser.add_argument("-s2", "--subtitle2", default="_cn.mp4", help="第二个字幕文件路径（默认: 主文件名_cn.mp4）")
     parser.add_argument("--sub1-x", type=int, default=0, help="字幕1 X轴偏移 (默认: 0)")
     parser.add_argument("--sub1-y", type=int, default=-10, help="字幕1 Y轴偏移 (默认: -10)")
     parser.add_argument("--sub2-x", type=int, default=0, help="字幕2 X轴偏移 (默认: 0)")
@@ -83,7 +83,7 @@ if __name__ == "__main__":
     if args.list_dir:
         # 获取目录下所有主视频文件（排除以 _en.mp4 或 _cn.mp4 结尾的文件）
         video_files = [f for f in glob.glob(os.path.join(args.main_video, '*.mp4')) 
-                       if not (f.endswith('_en.mp4') or f.endswith('_cn.mp4'))]
+                       if not (f.endswith(args.subtitle1) or f.endswith(args.subtitle2))]
         
         if not video_files:
             print(f"目录中未找到符合条件的主视频文件: {args.main_video}")
@@ -106,8 +106,8 @@ if __name__ == "__main__":
             main_dir = os.path.dirname(video_file)
             ext = os.path.splitext(video_file)[1]
 
-            local_args['subtitle1'] = os.path.join(main_dir, f"{main_base}_en{ext}")
-            local_args['subtitle2'] = os.path.join(main_dir, f"{main_base}_cn{ext}")
+            local_args['subtitle1'] = os.path.join(main_dir, f"{main_base}{args.subtitle1}")
+            local_args['subtitle2'] = os.path.join(main_dir, f"{main_base}{args.subtitle2}")
 
             # 修改输出文件名构造逻辑，添加 _blended 后缀
             base_name = os.path.basename(video_file)
@@ -133,10 +133,8 @@ if __name__ == "__main__":
         main_dir = os.path.dirname(args.main_video)
         ext = os.path.splitext(args.main_video)[1]
         
-        if args.subtitle1 == "_en":
-            args.subtitle1 = os.path.join(main_dir, f"{main_base}_en{ext}")
-        if args.subtitle2 == "_cn":
-            args.subtitle2 = os.path.join(main_dir, f"{main_base}_cn{ext}")
+        args.subtitle1 = os.path.join(main_dir, f"{main_base}{args.subtitle1}")
+        args.subtitle2 = os.path.join(main_dir, f"{main_base}{args.subtitle2}")
 
         # 生成输出路径
         if args.output is None:

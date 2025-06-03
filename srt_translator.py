@@ -292,6 +292,9 @@ def main():
                     shutil.copy2(srt_file, original_output_path)
                     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     print(f"[{__name__}] [{current_time}] >> 原始文件备份已保存至: {original_output_path}")
+                else:
+                    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    print(f"[{__name__}] [{current_time}] >> 原始文件备份已存在，跳过: {original_output_path}")
 
             # 修改输出文件名构造逻辑，添加_cn后缀
             base_name = os.path.basename(srt_file)
