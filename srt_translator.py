@@ -192,6 +192,8 @@ def main():
                        help='控制生成随机性的温度系数 (默认:1.0)')
     parser.add_argument('--timer', type=str, 
                        help='指定任务开始时间 (格式: HH:MM:SS)')
+    parser.add_argument('--stop_timer', type=str, 
+                       help='指定停止时间 (格式: HH:MM:SS)，超过该时间则停止处理')
     parser.add_argument('--batch', type=int, default=30, help='批次处理量 (建议25-30)')
     parser.add_argument('--verbose', action='store_true', help='启用详细输出模式')
     parser.add_argument('--list_dir', action='store_true', help='处理指定目录下的所有 .srt 文件')
@@ -233,6 +235,27 @@ def main():
             print(f"[{__name__}] [{current_time}] >> 错误的时间格式: {args.timer}，请使用 HH:MM:SS 格式")
             return
 
+    # 添加停止时间检查逻辑
+    if args.stop_timer:
+        try:
+            current_time = datetime.now()
+            stop_time = datetime.strptime(args.stop_timer, "%H:%M:%S").replace(
+                year=current_time.year, month=current_time.month, day=current_time.day)
+            
+            # 处理跨天情况
+            if stop_time < current_time:
+                stop_time = stop_time.replace(day=current_time.day+1)
+                
+            if current_time > stop_time:
+                current_time_str = current_time.strftime("%H:%M:%S")
+                print(f"[{__name__}] [{current_time_str}] >> 当前时间已超过停止时间 {args.stop_timer}，停止处理")
+                exit(0)
+                
+        except ValueError as e:
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{__name__}] [{current_time}] >> 错误的停止时间格式: {args.stop_timer}，请使用 HH:MM:SS 格式")
+            exit(1)
+
     # 修改: 添加默认output逻辑，但仅在非目录模式下生效
     if not args.output:
         if not args.list_dir:
@@ -271,7 +294,12 @@ def main():
     # 处理目录模式
     if args.list_dir:
         # 获取目录下所有.srt文件，排除以 _cn.srt 结尾的文件
-        srt_files = [f for f in glob.glob(os.path.join(args.input, '*.srt')) if not f.endswith('_cn.srt')]
+        srt_files = [
+            f for f in glob.glob(os.path.join(args.input, '*.srt')) 
+            if not f.endswith('_cn.srt') 
+            and not f.endswith('_en.srt')
+            and not os.path.exists(f.replace('.srt', f'{args.original_prefix_addon}.srt'))
+        ]
         if not srt_files:
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"[{__name__}] [{current_time}] >> 目录中未找到.srt文件: {args.input}")
@@ -281,6 +309,14 @@ def main():
         processed_files = 0
 
         for srt_file in srt_files:
+            # 添加目录模式下的停止时间检查
+            if args.stop_timer:
+                current_time = datetime.now()
+                if current_time > stop_time:
+                    current_time_str = current_time.strftime("%H:%M:%S")
+                    print(f"[{__name__}] [{current_time_str}] >> 当前时间已超过停止时间 {args.stop_timer}，停止处理")
+                    exit(0)
+
             # 添加原始文件后缀逻辑
             if args.original_prefix_addon:
                 os.makedirs(args.output, exist_ok=True)
@@ -312,28 +348,36 @@ def main():
             print(f"[{__name__}] [{current_time}] >> 开始处理文件: {srt_file}")
             print(f"[{__name__}] [{current_time}] >> 解析输入文件...")
             srt_entries = SRTCore.parse_srt(srt_file)
-            print(f"[{__name__}] [{current_time}] >> 解析完成，共发现 {len(srt_entries)} 条字幕")
+            print(f"[{__name__}] [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] >> 解析完成，共发现 {len(srt_entries)} 条字幕")
 
-            print(f"[{__name__}] [{current_time}] >> 准备翻译引擎...")
+            print(f"[{__name__}] [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] >> 准备翻译引擎...")
             client = SFClient(api_key=api_key, endpoint=api_endpoint, model=model, 
                             batch_size=args.batch, verbose=args.verbose, 
                             temperature=args.temperature)  # 新增temperature参数
             pipeline = TranslationPipeline(client, verbose=args.verbose)  # 传递verbose参数
 
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"[{__name__}] [{current_time}] >> 开始翻译流程...")
             translated_data = pipeline.execute(srt_entries)
         
             if args.verbose:
                 print(translated_data)
         
-            print(f"[{__name__}] [{current_time}] >> 翻译流程完成")
-            print(f"[{__name__}] [{current_time}] >> 生成结果文件...")
+            print(f"[{__name__}] [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] >> 翻译流程完成")
+            print(f"[{__name__}] [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] >> 生成结果文件...")
             SRTCore.generate_srt(translated_data, output_file)
 
             processed_files += 1
             print(f"[{__name__}] [{current_time}] >> 处理完成，输出文件已保存至 {output_file}")
 
     else:
+        # 在单文件模式处理开始前添加检查
+        current_time = datetime.now()
+        if args.stop_timer and current_time > stop_time:
+            current_time_str = current_time.strftime("%H:%M:%S")
+            print(f"[{__name__}] [{current_time_str}] >> 当前时间已超过停止时间 {args.stop_timer}，停止处理")
+            exit(0)
+
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"[{__name__}] [{current_time}] >> 正在解析输入文件...")
         srt_entries = SRTCore.parse_srt(args.input)

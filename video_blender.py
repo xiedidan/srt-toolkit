@@ -7,23 +7,33 @@ def combine_video_with_subtitles(args):
     # 将字典转换为 argparse.Namespace 对象
     args = argparse.Namespace(**args)
     
+    # 新增size参数处理逻辑
+    size = args.size.replace('x', ':') if args.size else None
+
     # 根据 hwaccel 参数设置 FFmpeg 命令
     if args.hwaccel == "nvenc":
         ffmpeg_cmd = [
             "ffmpeg", "-y", 
             "-filter_complex_threads", "32",
             "-filter_threads", "32",
-            "-hwaccel", "cuda",  # 启用 CUDA 硬件加速
+            "-hwaccel", "cuda",
             "-hwaccel_output_format", "cuda",
             "-c:v", "h264_cuvid",
             "-i", args.main_video,
-            "-hwaccel", "cuda",  # 启用 CUDA 硬件加速
+            "-hwaccel", "cuda",
             "-hwaccel_output_format", "cuda",
             "-i", args.subtitle1,
-            "-hwaccel", "cuda",  # 启用 CUDA 硬件加速
+            "-hwaccel", "cuda",
             "-hwaccel_output_format", "cuda",
             "-i", args.subtitle2,
             "-filter_complex",
+            # 添加缩放滤镜
+            f"[0:v]scale_cuda={size}[v0];" 
+            f"[1:v]scale_cuda={size}[v1];" 
+            f"[2:v]scale_cuda={size}[v2];"
+            f"[v0][v1]overlay_cuda=x={args.sub1_x}:y={args.sub1_y}[v1_combined];"
+            f"[v1_combined][v2]overlay_cuda=x={args.sub2_x}:y={args.sub2_y}[final]"
+            if args.size else
             f"[0:v][1:v]overlay_cuda=x={args.sub1_x}:y={args.sub1_y}[v1];"
             f"[v1][2:v]overlay_cuda=x={args.sub2_x}:y={args.sub2_y}[final]",
             "-map", "[final]",
@@ -41,6 +51,13 @@ def combine_video_with_subtitles(args):
             "-i", args.subtitle1,
             "-i", args.subtitle2,
             "-filter_complex",
+            # 添加缩放滤镜
+            f"[0:v]scale={size}[v0];"
+            f"[1:v]scale={size}[v1];"
+            f"[2:v]scale={size}[v2];"
+            f"[v0][v1]overlay=x={args.sub1_x}:y={args.sub1_y}[v1_combined];"
+            f"[v1_combined][v2]overlay=x={args.sub2_x}:y={args.sub2_y}[final]"
+            if args.size else
             f"[0:v][1:v]overlay=x={args.sub1_x}:y={args.sub1_y}[v1];"
             f"[v1][2:v]overlay=x={args.sub2_x}:y={args.sub2_y}[final]",
             "-map", "[final]",
@@ -76,6 +93,8 @@ if __name__ == "__main__":
     parser.add_argument("--hwaccel", default=None, choices=["None", "nvenc"], help="硬件加速选项，默认为None（CPU编码），可选nvenc（NVIDIA硬件加速）")
     # 新增 --main-suffix 参数
     parser.add_argument("--main-suffix", default="", help="主视频文件后缀（默认为空）")
+    # 新增 --size 参数
+    parser.add_argument("--size", default=None, help="强制调整所有视频尺寸（格式: 宽x高，如1920x1080）")
 
     args = parser.parse_args()
 
