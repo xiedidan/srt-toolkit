@@ -156,6 +156,38 @@ class SFClient:
         
         return None
 
+    def generate_description(self, entries: List[Dict], verbose: bool = False) -> Optional[Dict]:
+        """Generate media description from first 30 subtitle entries"""
+        # Extract first 30 entries
+        sample_entries = entries[:30]
+        content = " ".join(" ".join(entry['content']) for entry in sample_entries)
+        
+        prompt = (
+            "你是一个自媒体助手。请根据以下视频字幕内容的前30条，生成一个视频简介、一个视频标题和10个标签（用逗号分隔）。"
+            "请直接输出结果，不要解释。输出格式为JSON，包含三个字段：title（标题）、description（简介）、tags（标签，数组形式）。"
+            f"字幕内容如下：\n<content>\n{content}\n</content>"
+        )
+        
+        payload = {
+            "model": self.model,
+            "temperature": self.temperature,
+            "messages": [{"role": "user", "content": prompt}]
+        }
+        
+        # Same retry logic as process_batch
+        for attempt in range(self.retry_policy['max_attempts']):
+            try:
+                resp = requests.post(self.endpoint, headers=self.headers, json=payload, timeout=600)
+                resp.raise_for_status()
+                result = resp.json()['choices'][0]['message']['content']
+                return json.loads(result)
+            except Exception as e:
+                if verbose:
+                    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    print(f"[{self.__class__.__name__}.generate_description] [{current_time}] >> 生成描述错误（第{attempt+1}次尝试）: {str(e)}")
+                time.sleep(self.retry_policy['backoff'][attempt])
+        return None
+
 class TranslationPipeline:
     def __init__(self, client: SFClient, verbose: bool = False):
         self.client = client
@@ -199,6 +231,9 @@ def main():
     parser.add_argument('--list_dir', action='store_true', help='处理指定目录下的所有 .srt 文件')
     parser.add_argument('--original_prefix_addon', type=str, default='_en', 
                        help='为原始SRT文件添加后缀（在.srt扩展名之前，默认:_en）')
+    # 添加--desc参数
+    parser.add_argument('--desc', action='store_true', default=True,
+                       help='生成自媒体描述文件（标题、简介、标签），默认开启')
     
     args = parser.parse_args()
 
@@ -370,6 +405,21 @@ def main():
             processed_files += 1
             print(f"[{__name__}] [{current_time}] >> 处理完成，输出文件已保存至 {output_file}")
 
+            # 新增: 生成描述文件 (每处理完一个文件)
+            if args.desc and os.path.exists(output_file):
+                current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                print(f"[{__name__}] [{current_time}] >> 开始生成自媒体描述...")
+                try:
+                    translated_entries = SRTCore.parse_srt(output_file)
+                    desc_data = client.generate_description(translated_entries, args.verbose)
+                    if desc_data:
+                        desc_file = os.path.splitext(output_file)[0] + ".desc.json"
+                        with open(desc_file, 'w', encoding='utf-8') as f:
+                            json.dump(desc_data, f, ensure_ascii=False, indent=2)
+                        print(f"[{__name__}] [{current_time}] >> 描述文件已保存至: {desc_file}")
+                except Exception as e:
+                    print(f"[{__name__}] [{current_time}] >> 生成描述失败: {str(e)}")
+
     else:
         # 在单文件模式处理开始前添加检查
         current_time = datetime.now()
@@ -397,6 +447,21 @@ def main():
         SRTCore.generate_srt(translated_data, args.output)
 
         print(f"[{__name__}] [{current_time}] >> 处理完成！输出文件已保存至 {args.output}")
+        
+        # 新增: 生成描述文件
+        if args.desc:
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{__name__}] [{current_time}] >> 开始生成自媒体描述...")
+            try:
+                translated_entries = SRTCore.parse_srt(args.output)
+                desc_data = client.generate_description(translated_entries, args.verbose)
+                if desc_data:
+                    desc_file = os.path.splitext(args.output)[0] + ".desc.json"
+                    with open(desc_file, 'w', encoding='utf-8') as f:
+                        json.dump(desc_data, f, ensure_ascii=False, indent=2)
+                    print(f"[{__name__}] [{current_time}] >> 描述文件已保存至: {desc_file}")
+            except Exception as e:
+                print(f"[{__name__}] [{current_time}] >> 生成描述失败: {str(e)}")
 
 if __name__ == '__main__':
     main()
