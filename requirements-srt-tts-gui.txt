@@ -1,0 +1,6 @@
+# SRT TTS GUI 依赖
+pysrt>=1.1.2
+requests>=2.25.0
+tqdm>=4.50.0
+Pillow>=9.0.0  # 用于处理图像和图标
+# tkinter通常随Python一起安装，无需额外安装 
