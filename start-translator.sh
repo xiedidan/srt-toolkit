@@ -1,0 +1,1 @@
+python srt_translator.py -i "E:\video\youtube\trading\rizdom\ICT_SMC" --api_vendor deepseek --model_type deepseek-r1:671b --stop_timer 08:00:00 --batch 30 --list_dir --timer 00:30:00

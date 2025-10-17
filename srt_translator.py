@@ -232,8 +232,8 @@ def main():
     parser.add_argument('--original_prefix_addon', type=str, default='_en', 
                        help='为原始SRT文件添加后缀（在.srt扩展名之前，默认:_en）')
     # 添加--desc参数
-    parser.add_argument('--desc', action='store_true', default=True,
-                       help='生成自媒体描述文件（标题、简介、标签），默认开启')
+    parser.add_argument('--desc', action='store_true', default=False,
+                       help='生成自媒体描述文件（标题、简介、标签）')
     
     args = parser.parse_args()
 
