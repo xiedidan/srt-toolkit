@@ -1,4 +1,4 @@
-# SRT Translator - 字幕翻译与语音合成工具
+# SRT Toolkit - 字幕翻译与语音合成工具
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Python 3.6+](https://img.shields.io/badge/python-3.6+-blue.svg)](https://www.python.org/downloads/)
@@ -37,7 +37,7 @@
 ## 项目结构
 
 ```
-srt-translator/
+srt-toolkit/
 ├── srt_translator.py      # 字幕翻译核心模块
 ├── srt_tts.py            # 语音合成模块
 ├── srt_tts_gui.py        # 图形界面
@@ -71,8 +71,8 @@ srt-translator/
 
 1. 克隆项目
 ```bash
-git clone https://github.com/yourusername/srt-translator.git
-cd srt-translator
+git clone https://github.com/xiedidan/srt-toolkit.git
+cd srt-toolkit
 ```
 
 2. 安装基础依赖
@@ -259,7 +259,7 @@ A: 使用 `--list_dir` 参数处理整个目录，脚本会自动跳过已处理
 ## 联系方式
 
 如有问题或建议，请通过以下方式联系：
-- 提交Issue: [GitHub Issues](https://github.com/yourusername/srt-translator/issues)
+- 提交Issue: [GitHub Issues](https://github.com/xiedidan/srt-toolkit/issues)
 - 邮箱: your.email@example.com
 
 ---

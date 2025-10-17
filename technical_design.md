@@ -1,4 +1,4 @@
-# SRT Translator 技术设计文档
+# SRT Toolkit 技术设计文档
 
 ## 1. 更新模型调用逻辑，增加Ollama Cloud模型的调用能力
 
@@ -273,7 +273,7 @@ class Task(Base):
 
 ```mermaid
 gantt
-    title SRT Translator 项目实施时间线
+    title SRT Toolkit 项目实施时间线
     dateFormat  YYYY-MM-DD
     section 需求1: Ollama Cloud
     API集成       :a1, 2025-01-17, 3d
